@@ -21,45 +21,41 @@ def load_jsonl(filename: str)-> List[Dict]:
             if line.strip():
                 data.append(json.loads(line))
     return data
-    
-    
 
 def single_one_hot_encode(amino_acid: "str") -> np.array:
     '''A single amino acid is encoded in a numpy array as shown in the lecture. The index for the amino acid in the given string above (AMINO_ACIDS)
     is set to 1 all other value to 0.'''
-    vector = np.zeros((len(AMINO_ACIDS),len(amino_acid)))
-    
-    for i, aa in enumerate(amino_acid.upper()):
-        index = AMINO_ACIDS.find(aa)
-        if(index == -1):
-            raise ValueError(f"Invalid amino acid: {aa}")
-        vector[index, i] = 1
+    if len(amino_acid) != 1:
+        raise ValueError("single_one_hot_encode expects exactly one amino‑acid letter.")
+    aa = amino_acid.upper()
+    index = AMINO_ACIDS.find(aa)
+    if index == -1:
+        raise ValueError(f"Invalid amino acid: {aa}")
+    vector = np.zeros(20, dtype=np.int8)
+    vector[index] = 1
     return vector
-    
 
 def one_hot_encode_sequence(sequence:str, window_size=5) -> np.array:
     '''This function takes a sequence of amino acids and converts it into a 2D Numpy array
     representing the one-hot encoding. It has len(sequence) - 2*window_size rows and 20*(window_size*2 + 1) columns.
     '''
     seq = sequence.upper()
-    L = len(sequence)
+    L = len(seq)
     window_len = 2 * window_size + 1
-    encodings = []
-    
+    encoded = []
+
     for i in range(window_size, L - window_size):
-        window = seq[i - window_size: i + window_size + 1]
-        window_encoding = np.zeros((20, window_len), dtype=int)
-        
+        window = seq[i - window_size : i + window_size + 1]
+        win_vec = np.zeros((20, window_len), dtype=np.int8)
         for j, aa in enumerate(window):
-            index = AMINO_ACIDS.find(aa)
-            if index == -1:
+            idx = AMINO_ACIDS.find(aa)
+            if idx == -1:
                 raise ValueError(f"Invalid amino acid '{aa}' in window '{window}'")
-            window_encoding[index, j] = 1
-        
-        # Flatten to 1D and append
-        encodings.append(window_encoding.flatten())
-        
-    return np.array(encodings)
+            win_vec[idx, j] = 1
+
+        encoded.append(win_vec.flatten(order="F"))
+
+    return np.asarray(encoded, dtype=np.int8)
 
 def one_hot_encode_labeled_sequence(entry: Dict, window_size=5) -> Tuple[np.array, np.array]:
     '''
@@ -68,37 +64,29 @@ def one_hot_encode_labeled_sequence(entry: Dict, window_size=5) -> Tuple[np.arra
             - X: 2D one-hot encoded array of shape (n_valid_residues, 20 * window_length)
             - y: 1D array of labels (0, 1, 2) for H, E, C
     '''
-    sequence = entry["sequence"].upper()
-    labels = entry["label"].upper()
-    resolved = entry["resolved"]
-    
+    seq   = entry["sequence"].upper()
+    label = entry["label"].upper()
+    res   = entry["resolved"]              
     window_len = 2 * window_size + 1
+
     X, y = [], []
 
-    for i in range(window_size, len(sequence) - window_size):
-        window_residues = sequence[i - window_size : i + window_size + 1]
-        window_resolved = resolved[i - window_size : i + window_size + 1]
-        label = labels[i]
-
-        if label not in LABELS:
-            continue  # skip unknown labels
-
-        if not all(window_resolved):  # skip unresolved windows
+    for i in range(window_size, len(seq) - window_size):
+        centre_resolved = (res[i] == '1')
+        if not centre_resolved or label[i] not in LABELS:
             continue
 
-        window_encoding = np.zeros((20, window_len), dtype=int)
-
-        for j, aa in enumerate(window_residues):
+        win_vec = np.zeros((20, window_len), dtype=np.int8)
+        for j, aa in enumerate(seq[i - window_size : i + window_size + 1]):
             idx = AMINO_ACIDS.find(aa)
             if idx == -1:
-                break  # invalid amino acid → skip window
-            window_encoding[idx, j] = 1
-        else:
-            # only append if no break occurred
-            X.append(window_encoding.flatten())
-            y.append(LABELS[label])
+                break
+            win_vec[idx, j] = 1
+        else:                                    
+            X.append(win_vec.flatten(order="F")) 
+            y.append(LABELS[label[i]])
 
-    return np.array(X), np.array(y)
+    return np.asarray(X, dtype=np.int8), np.asarray(y, dtype=np.int8)
 
 def predict_secondary_structure(input: np.array, labels: np.array, size_hidden=10) -> Tuple[float, float, float]:
     '''
@@ -136,22 +124,16 @@ def calculate_Q3(prediction: str, truth: str) -> Tuple[float, float, float]:
     Returns:
         Tuple[float, float, float]: (Q3_H, Q3_E, Q3_C)
     '''
-    assert len(prediction) == len(truth), "Prediction and truth must be the same length."
+    if len(prediction) != len(truth):
+        raise ValueError("Prediction and truth must have the same length.")
 
-    counts = {'H': [0, 0], 'E': [0, 0], 'C': [0, 0]}  # Format: {label: [correct, total]}
+    scores = {}
+    for state in "HEC":
+        total = sum(1 for t in truth if t == state)
+        correct = sum(1 for p, t in zip(prediction, truth) if t == state and p == t)
+        scores[state] = correct / total if total else float("nan")
 
-    for pred, true in zip(prediction, truth):
-        if true in counts:
-            counts[true][1] += 1  # total count for this class
-            if pred == true:
-                counts[true][0] += 1  # correct prediction
-
-    Q3_H = counts['H'][0] / counts['H'][1] if counts['H'][1] > 0 else 0.0
-    Q3_E = counts['E'][0] / counts['E'][1] if counts['E'][1] > 0 else 0.0
-    Q3_C = counts['C'][0] / counts['C'][1] if counts['C'][1] > 0 else 0.0
-
-    return Q3_H, Q3_E, Q3_C
-
+    return scores["H"], scores["E"], scores["C"]
 
 if __name__ == "__main__":
     input_file = "./data/input.jsonl"
