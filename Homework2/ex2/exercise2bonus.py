@@ -28,9 +28,9 @@ class NeuralNetwork(object):
         # create and initialize your weigth matrices
         # consider more parameters like learning rate,
         # layer size, batch size, ...
-        self.w0 = np.random.randn(100,2)
-        self.w1 = np.random.randn(10,100)
-        self.w2 = np.random.randn(2,10)
+        self.w0 = np.random.randn(100,3)
+        self.w1 = np.random.randn(10,101)
+        self.w2 = np.random.randn(2,11)
         
         self.learning_rate = 0.05
 
@@ -41,12 +41,13 @@ class NeuralNetwork(object):
 
     def trainWeights(self, X, y, learning_rate=0.05):
         # We add bias to input X
-        X_b = self.add_bias(X.T)                        
-
-        # We forward pass with bias
+        X_T = X.T             
+        X_b = self.add_bias(X_T)                          
         z0 = self.w0 @ X_b                              
         a0 = self.activation(z0)
         a0_b = self.add_bias(a0)                        
+        print("a0_b shape:", a0_b.shape)
+        print("w1 shape:", self.w1.shape)
 
         z1 = self.w1 @ a0_b                             
         a1 = self.activation(z1)
@@ -75,16 +76,25 @@ class NeuralNetwork(object):
 
 
     def predict(self, X):
-        a0 = self.activation(self.w0 @ X.T)
-        a1 = self.activation(self.w1 @ a0)
-        pred = self.activation(self.w2 @ a1)
+        X_T = X.T
+        X_b = self.add_bias(X_T)
+        a0 = self.activation(self.w0 @ X_b)
+        a0_b = self.add_bias(a0)
+        a1 = self.activation(self.w1 @ a0_b)
+        a1_b = self.add_bias(a1)
+        pred = self.activation(self.w2 @ a1_b)
         return pred
+
 
     def costs(self, predictions, y):
         # calculate mean costs per point
         # SUM((y - pred)^2)
         s = (1 / 2) * (y.T - predictions) ** 2
         return np.mean(np.sum(s, axis=0))
+    
+    def add_bias(self, X):
+        # Adds a row of 1s as the bias term to input X
+        return np.vstack([np.ones((1, X.shape[1])), X])
 
 
 
@@ -111,15 +121,21 @@ train_acc = []
 test_acc = []
 
 for i in range(1000):
-
     model.trainWeights(X_train, y_train_oh, learning_rate=0.08)
-    y_test_predictions = model.predict(X_test)
-    y_test_predictions = np.argmax(y_test_predictions, axis=0)
-    train_predictions = np.argmax(model.predict(X_train), axis=0)
-    print("accuracy on test set: " + str(np.mean(y_test_predictions == y_test)) + " costs on training set: " + str(model.costs(train_predictions, y_train)))
+
+    y_test_logits = model.predict(X_test)
+    y_test_predictions = np.argmax(y_test_logits, axis=0)
+
+    y_train_logits = model.predict(X_train)
+    y_train_predictions = np.argmax(y_train_logits, axis=0)
+
+    print("accuracy on test set:", np.mean(y_test_predictions == y_test),
+          "costs on training set:", model.costs(y_train_logits, y_train_oh))
+
     epoche.append(i)
     test_acc.append(np.mean(y_test_predictions == y_test))
-    train_acc.append(np.mean(train_predictions == y_train))                
+    train_acc.append(np.mean(y_train_predictions == y_train))
+              
 
 print("baseline: " + str(np.sum(labels)/len(labels)))
 
@@ -129,4 +145,4 @@ plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
 plt.legend()
 plt.tight_layout()
-plt.savefig("exercise2.pdf")
+plt.savefig("exercise2bonus.pdf")
