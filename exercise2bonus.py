@@ -31,6 +31,8 @@ class NeuralNetwork(object):
         self.w0 = np.random.randn(100,2)
         self.w1 = np.random.randn(10,100)
         self.w2 = np.random.randn(2,10)
+        
+        self.learning_rate = 0.05
 
     
 
@@ -38,29 +40,38 @@ class NeuralNetwork(object):
         return expit(x)
 
     def trainWeights(self, X, y, learning_rate=0.05):
-        a0 = self.activation(self.w0 @ X.T)              
-        a1 = self.activation(self.w1 @ a0)               
-        pred = self.activation(self.w2 @ a1)            
+        # We add bias to input X
+        X_b = self.add_bias(X.T)                        
 
-        output_error = y.T - pred                       
-        delta2 = output_error * pred * (1 - pred)        
-        dw2 = delta2 @ a1.T / X.shape[0]                 
+        # We forward pass with bias
+        z0 = self.w0 @ X_b                              
+        a0 = self.activation(z0)
+        a0_b = self.add_bias(a0)                        
 
-        error1 = self.w2.T @ delta2                      
-        delta1 = error1 * a1 * (1 - a1)                  
-        dw1 = delta1 @ a0.T / X.shape[0]                 
+        z1 = self.w1 @ a0_b                             
+        a1 = self.activation(z1)
+        a1_b = self.add_bias(a1)                        
 
-        error0 = self.w1.T @ delta1                      
-        delta0 = error0 * a0 * (1 - a0)                  
-        dw0 = delta0 @ X / X.shape[0]                    
+        z2 = self.w2 @ a1_b                             
+        pred = self.activation(z2)
 
-        assert dw2.shape == self.w2.shape
-        assert dw1.shape == self.w1.shape
-        assert dw0.shape == self.w0.shape
+        # Backprop
+        delta2 = (y.T - pred) * pred * (1 - pred)       
+        dw2 = delta2 @ a1_b.T / X.shape[0]              
 
+        error1 = self.w2.T @ delta2                     
+        delta1 = error1[1:, :] * a1 * (1 - a1)          
+        dw1 = delta1 @ a0_b.T / X.shape[0]              
+
+        error0 = self.w1.T @ delta1                    
+        delta0 = error0[1:, :] * a0 * (1 - a0)         
+        dw0 = delta0 @ X_b.T / X.shape[0]               
+
+        # Update weights
         self.w2 += learning_rate * dw2
         self.w1 += learning_rate * dw1
         self.w0 += learning_rate * dw0
+
 
 
     def predict(self, X):

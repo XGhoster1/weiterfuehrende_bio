@@ -1,0 +1,9 @@
+1. The initial drop is likely due to random weight intialization.
+The model in the beginning is learning and has bias
+from the first training iterations so it fluctuates randomly.
+As it begins to learn to fit the data, it may overfit before
+becoming more able to recognize general data.
+
+2. The model has two hidden layers, therefore it is capable
+of "learning" nonlinear decisions. The input is 2D and the output
+binary, so it should be curved or concentric decision boundaries.
